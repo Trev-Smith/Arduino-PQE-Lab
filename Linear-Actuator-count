@@ -1,0 +1,71 @@
+#define ENA 3    // Enable pin (PWM)
+#define IN1 4    // Input 1
+#define IN2 5    // Input 2
+#define COUNTER_PIN 2   // Pulse this after extend+retract
+
+const int NUM_CYCLES = 1000;
+
+// ---- timings (kept from your sketch) ----
+const unsigned long EXTEND_MS  = 2000;  // extend duration
+const unsigned long RETRACT_MS = 2000;  // retract duration
+const unsigned long PULSE_MS   = 100;   // counter pulse width
+
+void setup() {
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+
+  pinMode(COUNTER_PIN, OUTPUT);
+  digitalWrite(COUNTER_PIN, LOW); // idle low
+
+  stopActuator();
+
+  // Run exactly NUM_CYCLES full cycles, then stop
+  for (int cycle = 0; cycle < NUM_CYCLES; cycle++) {
+    // Extend
+    extendActuator();
+    delay(EXTEND_MS);
+
+    // Retract
+    retractActuator();
+    delay(RETRACT_MS);
+
+    // Stop and pulse external counter once (one full cycle completed)
+    stopActuator();
+    pulseCounter();
+  }
+
+  // Final stop and halt forever
+  stopActuator();
+  while (true) { /* done */ }
+}
+
+void loop() {
+  // Nothing here; all work done in setup()
+}
+
+// ================== FUNCTIONS ==================
+void extendActuator() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 255);  // full speed (0–255)
+}
+
+void retractActuator() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, 255);  // full speed
+}
+
+void stopActuator() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+}
+
+// Pulse the external counter on D2 (active-high)
+void pulseCounter() {
+  digitalWrite(COUNTER_PIN, HIGH);
+  delay(PULSE_MS);
+  digitalWrite(COUNTER_PIN, LOW);
+}
