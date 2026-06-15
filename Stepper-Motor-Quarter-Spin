@@ -1,0 +1,187 @@
+/*
+
+#include <AccelStepper.h>
+
+// Stepper motor setup
+AccelStepper stepper(AccelStepper::DRIVER, 3, 2);
+
+int currentCycle = 0;
+const int maxCycles = 10000;   // STOP after this many cycles
+long quarterSteps = 5400;      // steps per quarter cycle
+long savedPosition = 0;        // where we stopped
+bool returning = false;        // are we returning now?
+
+// Trumeter counter control pin
+const int counterPin = 8;      // connected to transistor base/gate
+const int startSwitchPin = 5;  // start switch pin
+
+bool programStarted = false;
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(counterPin, OUTPUT);
+  digitalWrite(counterPin, LOW);
+
+  pinMode(startSwitchPin, INPUT_PULLUP);
+
+  stepper.setMaxSpeed(6000);
+  stepper.setAcceleration(3000);
+
+  savedPosition = stepper.currentPosition();
+
+  Serial.println("Waiting for start switch (pin 5) to be flipped...");
+}
+
+void loop() {
+  if (!programStarted) {
+    // wait for start switch to be flipped (LOW)
+    if (digitalRead(startSwitchPin) == LOW) {
+      Serial.println("Start switch flipped — starting program.");
+      delay(300); // debounce
+      programStarted = true;
+
+      stepper.moveTo(savedPosition + quarterSteps);
+    }
+    return;  // do nothing else yet
+  }
+
+  stepper.run();
+
+  if (currentCycle >= maxCycles) {
+    Serial.println("Reached 10,000 cycles. Stopping.");
+    while (1);  // halt here
+  }
+
+  if (!returning && stepper.distanceToGo() == 0) {
+    // finished quarter cycle
+    savedPosition = stepper.currentPosition();
+
+    // increment Trumeter counter
+    sendCounterPulse();
+
+    delay(100);
+
+    // move back to saved position
+    stepper.moveTo(savedPosition);
+    returning = true;
+  }
+
+  if (returning && stepper.distanceToGo() == 0) {
+    // finished returning
+
+    delay(100);
+
+    // move next quarter cycle
+    stepper.moveTo(stepper.currentPosition() + quarterSteps);
+    returning = false;
+
+    currentCycle++;
+    Serial.print("Cycles completed: ");
+    Serial.println(currentCycle);
+  }
+}
+
+*/
+// Function to send a single pulse to the Trumeter counter
+
+#include <AccelStepper.h>
+
+// Stepper motor setup
+AccelStepper stepper(AccelStepper::DRIVER, 3, 2);
+
+int currentCycle = 0;
+const int maxCycles = 10000;        // STOP after this many cycles
+const long quarterSteps = 5400;     // steps per quarter cycle
+
+// Trumeter counter control pin
+const int counterPin = 8;           // connected to transistor base/gate
+const int startSwitchPin = 5;       // start/stop switch pin
+
+bool programRunning = false;        // is the program running?
+bool returning = false;             // are we returning to 0?
+bool lastSwitchState = HIGH;        // for edge detection
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(counterPin, OUTPUT);
+  digitalWrite(counterPin, LOW);
+
+  pinMode(startSwitchPin, INPUT_PULLUP);
+
+  // Tuned speed and acceleration for accuracy
+  stepper.setMaxSpeed(6000);        // adjust upward after testing
+  stepper.setAcceleration(1000);    // adjust upward after testing
+
+  stepper.setCurrentPosition(0);
+
+  Serial.println("Waiting for switch (pin 5) to start/stop...");
+}
+
+void loop() {
+  // Check switch for toggle
+  bool currentSwitchState = digitalRead(startSwitchPin);
+
+  if (currentSwitchState == LOW && lastSwitchState == HIGH) {
+    // falling edge detected — toggle program
+    programRunning = !programRunning;
+    delay(300);  // debounce
+
+    if (programRunning) {
+      Serial.println("Program started.");
+      currentCycle = 0;
+      returning = false;
+      stepper.setCurrentPosition(0);
+      stepper.moveTo(quarterSteps);
+    } else {
+      Serial.println("Program stopped.");
+      stepper.stop();
+    }
+  }
+  lastSwitchState = currentSwitchState;
+
+  if (!programRunning) {
+    return;  // do nothing if stopped
+  }
+
+  stepper.run();
+
+  if (currentCycle >= maxCycles) {
+    Serial.println("Reached max cycles. Stopping.");
+    programRunning = false;
+    return;
+  }
+
+  if (!returning && stepper.distanceToGo() == 0) {
+    // finished forward quarter cycle
+    stepper.setCurrentPosition(0);
+
+    sendCounterPulse();
+    delay(100);
+
+    stepper.moveTo(0);  // return to start
+    returning = true;
+  }
+
+  if (returning && stepper.distanceToGo() == 0) {
+    // finished returning
+    stepper.setCurrentPosition(0);
+
+    delay(100);
+
+    stepper.moveTo(quarterSteps);  // next forward quarter
+    returning = false;
+
+    currentCycle++;
+    Serial.print("Cycles completed: ");
+    Serial.println(currentCycle);
+  }
+}
+
+void sendCounterPulse() {
+  digitalWrite(counterPin, HIGH);
+  delay(100);                 // pulse duration
+  digitalWrite(counterPin, LOW);
+  Serial.println("Counter incremented.");
+}
